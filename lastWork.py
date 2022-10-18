@@ -232,7 +232,7 @@ class Main(QWidget):
         Settings.DESCTOP_HEIGHT = screen_height
         self.setGeometry(0, 0, screen_width, screen_height)
         self.pixmapMap = QPixmap(Settings.FILE_NAME)
-        self.settings = Settings()
+        #self.settings = Settings()
         # в самом начале установим координаты центральной точки в 0 - 0
         Settings.CENTR_LAT = 0
         Settings.CENTR_LON = 0
@@ -435,7 +435,11 @@ class Main(QWidget):
 
         self.labelMap.resize(int(width_new), int(height_new))
         self.labelMap.setPixmap(
-            self.pixmapMap.scaled(int(width_new), int(height_new), Qt.KeepAspectRatio, Qt.FastTransformation))
+            self.pixmapMap.scaled(
+                int(width_new),
+                int(height_new),
+                Qt.KeepAspectRatio,
+                Qt.FastTransformation))
 
     def updateScale(self, scale):
         if (scale > Settings.CURRENT_MASHTAB):
@@ -508,6 +512,11 @@ class Main(QWidget):
 
 class Login(QDialog):
     def __init__(self, parent=None):
+        screen_width = QApplication.instance().desktop().availableGeometry().width()
+        screen_height = QApplication.instance().desktop().availableGeometry().height()
+        Settings.DESCTOP_WIDHT = screen_width
+        Settings.DESCTOP_HEIGHT = screen_height
+        print(Settings.DESCTOP_WIDHT, Settings.DESCTOP_HEIGHT)
         super(Login, self).__init__(parent)
         self.buttonLogin = QPushButton('Login', self)
         self.buttonLogin.clicked.connect(self.handleLogin)
@@ -547,7 +556,6 @@ class MainWindow(QMainWindow):
 
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
-        self.settings = Settings()
         self.myWidget = Main()
         self.exitAction = QAction(QIcon('icons/exit.png'), 'Exit', self)
         self.exitAction.setShortcut('Ctrl+Q')
@@ -578,7 +586,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.myWidget)
 
         self.statusBar = self.statusBar()
-        strStatus = str(self.settings.getGridScale()) + 'm, Grid=' + str(self.settings.getScale())
+        strStatus = str(Settings().getGridScale()) + 'm, Grid=' + str(Settings().getScale())
         self.statusBar.showMessage(strStatus)
 
         self.scale = QSlider(self)
@@ -586,7 +594,7 @@ class MainWindow(QMainWindow):
         self.scale.setMinimum(1)
         self.scale.setMaximum(9)
         self.scale.setPageStep(1)
-        self.scale.setSliderPosition(self.settings.getScale())
+        self.scale.setSliderPosition(Settings().getScale())
         self.scale.setTickInterval(1)
         self.scale.setOrientation(QtCore.Qt.Vertical)
         self.scale.setTickPosition(QtWidgets.QSlider.TicksAbove)
@@ -599,13 +607,16 @@ class MainWindow(QMainWindow):
         self.labelScale5 = QLabel(self)
         self.labelScale5.setText('5')
         self.labelScale5.setGeometry(1560, 444, 50, 50)
-        self.scale.setGeometry(1575, 320, 22, 300)
+        if Settings.DESCTOP_WIDHT is not None:
+            self.scale.setGeometry(int(Settings.DESCTOP_WIDHT - 30), int(Settings.DESCTOP_HEIGHT/2) - 150, 25, 300)
+        else:
+            self.scale.setGeometry(1575, 320, 22, 300)
         self.scale.valueChanged.connect(self.updateScale)
 
     def updateScale(self):
         current_scale = self.scale.value()
         self.myWidget.updateScale(current_scale)
-        strStatus = str(self.settings.getGridScale()) + 'm, Grid=' + str(self.settings.getScale())
+        strStatus = str(Settings().getGridScale()) + 'm, Grid=' + str(Settings().getScale())
         self.statusBar.showMessage(strStatus)
 
     def createGrid(self):
