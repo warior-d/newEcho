@@ -180,13 +180,12 @@ class LabelGrid(QLabel):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.setGeometry(0, 0, Settings.DESCTOP_WIDHT, Settings.DESCTOP_HEIGHT)
-        self.IsModyfied = False
+        self.IsModyfied = True
         self.moving = QPoint()
         self.lastX = Settings.POS_X
         self.lastY = Settings.POS_Y
 
     def paintEvent(self, event):
-        upperNumber = 10000
         if self.IsModyfied == True:
             super().paintEvent(event)
             dx = 0
