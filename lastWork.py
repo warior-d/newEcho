@@ -177,6 +177,8 @@ class LabelShip(QLabel):
 # постоянный Paint event
 class LabelGrid(QLabel):
 
+
+    # TODO: обрабатывать событие ухода с экрана - через self.label.update()
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.setGeometry(0, 0, Settings.DESCTOP_WIDHT, Settings.DESCTOP_HEIGHT)
@@ -469,27 +471,24 @@ class Main(QWidget):
     #     scale_grid = Settings.GRID_SCALE[Settings.CURRENT_MASHTAB - 1]
     #     self.rescaleMap()
 
+
+    def mouseDoubleClickEvent(self, event):
+        tochka = self.getCoordFromCentrPoint(int(Settings.DESCTOP_WIDHT / 2),
+                                             int(Settings.DESCTOP_HEIGHT / 2),
+                                             event.pos().x(),
+                                             event.pos().y())
+        curLat, curLon = tochka.split(', ')
+        print('click! ', curLat, curLon, " ... mouse on: ", event.pos())
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.mouse_old_pos = event.pos()  # позиция Мыши
             self.label_old_pos = self.labelMap.pos()  # позиция Карты
-            print(getCoord(self.labelMap.pos().x(), self.labelMap.pos().y(), self.mouse_old_pos.x(),
-                           self.mouse_old_pos.y()), " ... mouse on: ", event.pos())
 
-            tochka = self.getCoordFromCentrPoint(int(Settings.DESCTOP_WIDHT / 2),
-                                                         int(Settings.DESCTOP_HEIGHT / 2),
-                                                         event.pos().x(),
-                                                         event.pos().y())
-            curLat, curLon = tochka.split(', ')
-            print('click! ', curLat, curLon)
-            #print('vot: ', self.getPointByCoords(curLat, curLon))
+
         if event.button() == Qt.RightButton:
             #d = distanceInPixels(self.labelMap.pos().x(), self.labelMap.pos().y(), Settings.DESCTOP_WIDHT / 2, Settings.DESCTOP_HEIGHT / 2)
             print('center is: ', Settings.CENTR_LAT, ',', Settings.CENTR_LON)
-            if self.labelIma.isVisible():
-                self.labelIma.setVisible(False)
-            else:
-                self.labelIma.setVisible(True)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -607,13 +606,13 @@ class MainWindow(QMainWindow):
         self.scale.setTickPosition(QtWidgets.QSlider.TicksAbove)
         self.labelScale1 = QLabel(self)
         self.labelScale1.setText('1')
-        self.labelScale1.setGeometry(1560, 590, 50, 50)
+        self.labelScale1.setGeometry(int(Settings.DESCTOP_WIDHT - 45), int(Settings.DESCTOP_HEIGHT/2) + 120, 50, 50)
         self.labelScale9 = QLabel(self)
         self.labelScale9.setText('9')
-        self.labelScale9.setGeometry(1560, 300, 50, 50)
+        self.labelScale9.setGeometry(int(Settings.DESCTOP_WIDHT - 45), int(Settings.DESCTOP_HEIGHT/2) - 170 , 50, 50)
         self.labelScale5 = QLabel(self)
         self.labelScale5.setText('5')
-        self.labelScale5.setGeometry(1560, 444, 50, 50)
+        self.labelScale5.setGeometry(int(Settings.DESCTOP_WIDHT - 45), int(Settings.DESCTOP_HEIGHT/2) - 25, 50, 50)
         if Settings.DESCTOP_WIDHT is not None:
             self.scale.setGeometry(int(Settings.DESCTOP_WIDHT - 30), int(Settings.DESCTOP_HEIGHT/2) - 150, 25, 300)
         else:
