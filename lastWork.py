@@ -10,7 +10,7 @@ from geopy import Point
 from geopy.distance import geodesic, distance
 import xml.etree.ElementTree as ET
 from math import atan2, degrees, pi, sin, cos, tan, radians, sqrt
-from PyQt5.QtCore import Qt, QPoint
+from PyQt5.QtCore import Qt, QPoint, QRect
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen, QIcon
 
 
@@ -111,7 +111,6 @@ class Settings():
     DESCTOP_HEIGHT = None
     CENTR_LAT = None
     CENTR_LON = None
-    ZOOMING = None
     # Для увеличения можно поменять обратно сделать!
     GRID_SCALE = ["10", "20", "40", "80", "160", "320", "640", "1000", "2000"]
     #               0     1     2     3     4      5      6       7       8
@@ -174,47 +173,59 @@ class LabelShip(QLabel):
         painter.end()
         self.setPixmap(pixmap)
 
+
+# постоянный Paint event
 class LabelGrid(QLabel):
+
     def __init__(self, parent):
         super().__init__(parent=parent)
-        # self.move(100, 100)
-        self.setGeometry(0, 0, 1900, 1800)
+        self.setGeometry(0, 0, Settings.DESCTOP_WIDHT, Settings.DESCTOP_HEIGHT)
+        self.IsModyfied = False
+        self.moving = QPoint()
+        self.lastX = Settings.POS_X
+        self.lastY = Settings.POS_Y
 
     def paintEvent(self, event):
-        if Settings.NEED_GRID == 1:
-            pixmap = QPixmap()
-            x = Settings.POS_X
-            y = Settings.POS_Y
-            if None not in (Settings.IMAGE_HEIGHT, Settings.IMAGE_WIDTH):
-                x = Settings.POS_X + int(Settings.IMAGE_WIDTH / 2)
-                y = Settings.POS_Y + int(Settings.IMAGE_HEIGHT / 2)
-            painter = QPainter(pixmap)
-            painter.begin(self)
-            for i in range(-10000, 10000, Settings.GRID_STEP):
-                painter.drawLine(x + i, 0, x + i, 10000)
-                painter.drawLine(x - i, 0, x - i, 10000)
-                painter.drawLine(0, y + i, 10000, y + i)
-                painter.drawLine(0, y - i, 10000, y - i)
-            pen = QPen(Qt.GlobalColor.green, 5, Qt.PenStyle.SolidLine)
-            pen.setCapStyle(Qt.PenCapStyle.MPenCapStyle)
-            painter.setPen(pen)
-            painter.drawPoint(int(Settings.DESCTOP_WIDHT / 2), int(Settings.DESCTOP_HEIGHT / 2))
+        upperNumber = 10000
+        if self.IsModyfied == True:
+            super().paintEvent(event)
+            dx = 0
+            dy = 0
+            painter = QPainter(self)
+            if (self.lastX != Settings.POS_X) or (self.lastY != Settings.POS_Y):
+                dx = self.lastX - Settings.POS_X
+                dy = self.lastY - Settings.POS_Y
+            x = int(Settings.DESCTOP_WIDHT / 2) - dx
+            y = int(Settings.DESCTOP_HEIGHT / 2) - dy
+            qntX = int(Settings.DESCTOP_WIDHT / Settings.GRID_STEP)
+            qntY = int(Settings.DESCTOP_HEIGHT / Settings.GRID_STEP)
+            # TODO: теперь сюда нужно посчитать смещение, прибавить по X и Y!
+            # докрутить!
+            for i in range(int(Settings.DESCTOP_WIDHT / qntX), Settings.DESCTOP_WIDHT + abs(dx), Settings.GRID_STEP):
+                painter.drawLine(x, 0, x, Settings.DESCTOP_HEIGHT)
+                painter.drawLine(x + i, 0, x + i, Settings.DESCTOP_HEIGHT)
+                painter.drawLine(x - i, 0, x - i, Settings.DESCTOP_HEIGHT)
+            for i in range(int(Settings.DESCTOP_HEIGHT / qntY), Settings.DESCTOP_HEIGHT + abs(dy), Settings.GRID_STEP):
+                painter.drawLine(0, y, Settings.DESCTOP_WIDHT, y)
+                painter.drawLine(0, y + i, Settings.DESCTOP_WIDHT, y + i)
+                painter.drawLine(0, y - i, Settings.DESCTOP_WIDHT, y - i)
             if Settings.PAINT_POSx is not None:
                 pen = QPen(Qt.GlobalColor.yellow, 5, Qt.PenStyle.SolidLine)
                 pen.setCapStyle(Qt.PenCapStyle.MPenCapStyle)
                 painter.setPen(pen)
                 painter.drawPoint(int(Settings.PAINT_POSx), int(Settings.PAINT_POSy))
-            painter.end()
-            self.setPixmap(pixmap)
+            pen = QPen(Qt.GlobalColor.green, 5, Qt.PenStyle.SolidLine)
+            pen.setCapStyle(Qt.PenCapStyle.MPenCapStyle)
+            painter.setPen(pen)
+            painter.drawPoint(int(Settings.DESCTOP_WIDHT / 2), int(Settings.DESCTOP_HEIGHT / 2))
+            self.IsModyfied = False
 
-class LabelIma(QLabel):
-    def __init__(self, parent):
-        super().__init__(parent=parent)
-        # self.move(100, 100)
-        self.move(562, 210)
-        #self.setGeometry(0, 0, 1900, 1800)
-        # pixmap = QPixmap("hata17.jpg")
-        # self.setPixmap(pixmap)
+    def setModyfyed(self, mode):
+        self.IsModyfied = mode
+
+    def setMoving(self, delta):
+        print(delta)
+
 
 class Main(QWidget):
     mouse_old_pos = None
@@ -232,7 +243,6 @@ class Main(QWidget):
         Settings.DESCTOP_HEIGHT = screen_height
         self.setGeometry(0, 0, screen_width, screen_height)
         self.pixmapMap = QPixmap(Settings.FILE_NAME)
-        #self.settings = Settings()
         # в самом начале установим координаты центральной точки в 0 - 0
         Settings.CENTR_LAT = 0
         Settings.CENTR_LON = 0
@@ -252,8 +262,7 @@ class Main(QWidget):
 
         # Объект - Label с наложенной сеткой
         self.labelGrid = LabelGrid(self)
-        self.labelIma = LabelIma(self)
-        self.labelIma.move(200, 150)
+        self.labelGrid.setVisible(False)
 
         # Определим РЕАЛЬНОЕ (по координатам) расстояние между точками из KML
         # И отобразим на карте!
@@ -402,6 +411,8 @@ class Main(QWidget):
     # увеличение / уменьшение картинки
     # TODO: возможно, добавить и смещение - отдельной функцией.
     def zoomMap(self):
+        self.labelGrid.update()
+        self.labelGrid.setModyfyed(True)
         # все, что ту делается - берем изначальный image, и сжимаем (растягиваем) его
         # то есть, из исходного (как есть) делаем сразу готовый.
         coordinatesFromFile = getCoordsFromKML(Settings.KML_FILE_NAME)
@@ -442,20 +453,17 @@ class Main(QWidget):
                 Qt.FastTransformation))
 
     def updateScale(self, scale):
-        if (scale > Settings.CURRENT_MASHTAB):
-            Settings.ZOOMING = False
-        else:
-            Settings.ZOOMING = True
         Settings.CURRENT_MASHTAB = scale
         self.zoomMap()
 
     def createGrid(self):
-        if Settings.NEED_GRID == 0:
-            Settings.NEED_GRID = 1
-            self.update()
+        #Settings.NEED_GRID
+        if self.labelGrid.isVisible() == False:
+            self.labelGrid.setVisible(True)
+            self.labelGrid.update()
         else:
-            Settings.NEED_GRID = 0
-            self.update()
+            self.labelGrid.setVisible(False)
+            self.labelGrid.update()
 
     # def updateSliderScale(self):
     #     Settings.CURRENT_MASHTAB = self.scale.value()
@@ -492,6 +500,8 @@ class Main(QWidget):
                 Settings.CENTR_LAT, Settings.CENTR_LON = self.newCentr.split(', ')
 
     def mouseMoveEvent(self, event):
+        self.labelGrid.setModyfyed(True)
+        self.labelGrid.update()
         if not self.mouse_old_pos:
             return
         # разница в передвижении:
@@ -508,7 +518,6 @@ class Main(QWidget):
         new_pos_center = self.supposedCentr + delta
         self.newCentr = self.getCoordFromCentrPoint(new_pos_center.x(), new_pos_center.y(),
                                                int(Settings.DESCTOP_WIDHT / 2), int(Settings.DESCTOP_HEIGHT / 2))
-
 
 class Login(QDialog):
     def __init__(self, parent=None):
@@ -550,7 +559,6 @@ class Login(QDialog):
         else:
             QtWidgets.QMessageBox.warning(
                 self, 'Error', 'Chosen image file have not .kml file around!')
-
 
 class MainWindow(QMainWindow):
 
