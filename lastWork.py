@@ -1,16 +1,17 @@
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QDialog, QHBoxLayout, QFileDialog, QLabel, QWidget, QMainWindow, QApplication, QSlider, \
-    QAction, qApp, QToolBar, QStackedWidget, QPushButton
+    QAction, qApp, QToolBar, QStackedWidget, QPushButton, QDesktopWidget, QComboBox, QLCDNumber
 # import newReady as myWidget
 from pathlib import Path
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtSerialPort
+from PyQt5.QtSerialPort import QSerialPortInfo, QSerialPort
 import csv
 import os
 from geopy import Point
 from geopy.distance import geodesic, distance
 import xml.etree.ElementTree as ET
-from math import atan2, degrees, pi, sin, cos, tan, radians, sqrt
-from PyQt5.QtCore import Qt, QPoint, QRect
+from math import atan2, degrees, pi, sin, cos, radians
+from PyQt5.QtCore import Qt, QPoint, QRect, QIODevice
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QPen, QIcon
 
 
@@ -122,6 +123,11 @@ class Settings():
     COURSE = None
     PAINT_POSx = None
     PAINT_POSy = None
+    BAUD_RATES = ["1200", "2400", "4800", "9600", "19200", "38400", "57600", "115200"]
+    BAUD_RATE = None
+    COM_PORT_EKHO = None
+    GPS_DEPTH_KEY = '$SDDBT'
+    GPS_DATA_KEY = '$GPRMC'
 
     # установка текущего масштаба (1 - 9)
     def setScale(self, scale):
@@ -172,7 +178,6 @@ class LabelShip(QLabel):
             painter.drawEllipse(centr, rad, rad)
         painter.end()
         self.setPixmap(pixmap)
-
 
 # постоянный Paint event
 class LabelGrid(QLabel):
@@ -225,7 +230,7 @@ class LabelGrid(QLabel):
         self.IsModyfied = mode
 
     def setMoving(self, delta):
-        print(delta)
+        pass
 
 
 class Main(QWidget):
@@ -291,9 +296,6 @@ class Main(QWidget):
 
     def setImageMap(self, filename):
         Settings.FILE_NAME = filename
-
-    def getImageMap(self):
-        return Settings.FILE_NAME
 
     def updateCentrPoint(self, newLat = 0, newLon = 0):
         # по-правильному, оно должно меняться ТОЛЬКО при перемещении
@@ -487,8 +489,7 @@ class Main(QWidget):
 
 
         if event.button() == Qt.RightButton:
-            #d = distanceInPixels(self.labelMap.pos().x(), self.labelMap.pos().y(), Settings.DESCTOP_WIDHT / 2, Settings.DESCTOP_HEIGHT / 2)
-            print('center is: ', Settings.CENTR_LAT, ',', Settings.CENTR_LON)
+            print('center is: ', Settings.CENTR_LAT, ',', Settings.CENTR_LON, " set: ", Settings.BAUD_RATE, ' ', Settings.COM_PORT_EKHO)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -526,6 +527,7 @@ class Login(QDialog):
         print(Settings.DESCTOP_WIDHT, Settings.DESCTOP_HEIGHT)
         super(Login, self).__init__(parent)
         self.buttonLogin = QPushButton('Login', self)
+
         self.buttonLogin.clicked.connect(self.handleLogin)
         layout = QHBoxLayout(self)
         layout.addWidget(self.buttonLogin)
@@ -563,9 +565,6 @@ class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
         self.myWidget = Main()
-        self.exitAction = QAction(QIcon('icons/exit.png'), 'Exit', self)
-        self.exitAction.setShortcut('Ctrl+Q')
-        self.exitAction.triggered.connect(qApp.quit)
 
         self.mainmenu = self.menuBar()
         # File ->
@@ -578,14 +577,28 @@ class MainWindow(QMainWindow):
         self.menuOpenMap = self.menuOpen.addAction(self.openMapFileAction)
         # File -> Open -> Open Depth File
         self.menuOpenDepth = self.menuOpen.addAction('Depth File')
-        # File.actions
+        # File.Connect
+        self.comConnectAction = QAction(QIcon('icons/com_port.png'), 'Connect...', self)
+        self.comConnectAction.setShortcut('Ctrl+C')
+        self.comConnectAction.triggered.connect(self.waitingSerial)
+        self.menuFile.addAction(self.comConnectAction)
+        # File.Exit
+        self.exitAction = QAction(QIcon('icons/exit.png'), 'Exit', self)
+        self.exitAction.setShortcut('Ctrl+Q')
+        self.exitAction.triggered.connect(qApp.quit)
         self.menuFile.addAction(self.exitAction)
+
 
         # Settings ->
         self.menuSettings = self.mainmenu.addMenu('Settings')
-        self.menuGridAction = QAction(QIcon('grid.png'), 'Add Grid', self)
+        # Settings -> Add Grid
+        self.menuGridAction = QAction(QIcon('icons/grid.png'), 'Add Grid', self)
         self.menuGridAction.triggered.connect(self.createGrid)
         self.menuGrid = self.menuSettings.addAction(self.menuGridAction)
+        # Settings -> NMEA / COM
+        self.menuNMEAAction = QAction(QIcon('icons/nmea.png'), 'NMEA/COM', self)
+        self.menuNMEAAction.triggered.connect(self.openMNEAsettingsWindow)
+        self.menuNMEA = self.menuSettings.addAction(self.menuNMEAAction)
 
         # self.toolbar = self.addToolBar('Exit')
 
@@ -618,6 +631,17 @@ class MainWindow(QMainWindow):
         else:
             self.scale.setGeometry(1575, 320, 22, 300)
         self.scale.valueChanged.connect(self.updateScale)
+        self.LCDspeed = QLCDNumber(self)
+        self.LCDspeed.setGeometry(5, 25, 110, 60)
+        self.LCDcourse = QLCDNumber(self)
+        self.LCDcourse.setGeometry(5, 85, 110, 60)
+        self.LCDdepth = QLCDNumber(self)
+        self.LCDdepth.setGeometry(5, 145, 110, 60)
+        self.labelInfo = QLabel(self)
+        self.labelInfo.setGeometry(5, 230, 210, 30)
+        self.serial = QSerialPort(self)
+
+
 
     def updateScale(self):
         current_scale = self.scale.value()
@@ -627,6 +651,92 @@ class MainWindow(QMainWindow):
 
     def createGrid(self):
         self.myWidget.createGrid()
+
+    def openMNEAsettingsWindow(self):
+        dialog = SettingsDialog(self)
+        dialog.exec_()
+        dialog.show()
+
+    def waitingSerial(self):
+        try:
+            if Settings.COM_PORT_EKHO is not None and (self.serial.isOpen() == False):
+                self.serial.setPortName(Settings.COM_PORT_EKHO)
+                self.serial.setBaudRate(int(Settings.BAUD_RATE))
+                conn = self.serial.open(QIODevice.ReadOnly)
+                if conn == True:
+                    self.serial.readyRead.connect(self.onRead)
+            elif self.serial.isOpen() == True:
+                self.serial.close()
+        except Exception as e:
+            print(e)
+
+    def onRead(self):
+        buffer = []
+        rx = self.serial.readLine()
+        rxs = str(rx, 'utf-8')
+        try:
+            print(rxs)
+        except Exception as e:
+            print(e)
+        # rxs = str(rx, 'utf-8').strip()
+        # print(rx)
+        # if Settings.GPS_DEPTH_KEY in rxs:
+        #     depthDataStr = rxs.split(',')
+        #     speed = depthDataStr[3]
+        #     self.LCDspeed.display(speed)
+        # if Settings.GPS_DATA_KEY in rxs:
+        #     gpsData = rxs.split(',')
+
+
+
+class SettingsDialog(QDialog):
+    def __init__(self, parent):
+        super().__init__(parent=parent)
+        self.setGeometry(0, 0, 420, 400)
+        self.labelPort = QLabel(self)
+        self.labelPort.setText('COM port:')
+        self.labelPort.move(5, 20)
+        self.comboPorts = QComboBox(self)
+        self.comboPorts.move(70, 16)
+        self.labelBaudRate = QLabel(self)
+        self.labelBaudRate.setText('Baud rate:')
+        self.labelBaudRate.move(5, 50)
+        self.comboBaud = QComboBox(self)
+        self.comboBaud.addItems(Settings.BAUD_RATES)
+        self.comboBaud.move(70, 46)
+        self.setCenter()
+        self.ComPorts = self.setPorts()
+        self.buttonOK = QPushButton(self)
+        self.buttonOK.setText("OK")
+        self.buttonOK.move(250, 350)
+        self.buttonOK.clicked.connect(self.returnOK)
+        self.buttonNOT = QPushButton(self)
+        self.buttonNOT.setText("Cancel")
+        self.buttonNOT.move(330, 350)
+        self.buttonNOT.clicked.connect(self.returnNOT)
+
+    def setCenter(self):
+        resolution = QDesktopWidget().screenGeometry()
+        self.move(int((resolution.width() / 2) - (self.frameSize().width() / 2)),
+                  int((resolution.height() / 2) - (self.frameSize().height() / 2)))
+
+    def setPorts(self):
+        portList = []
+        ports = QSerialPortInfo().availablePorts()
+        for port in ports:
+            name = port.portName()
+            descr = port.description()
+            portList.append(name)
+        self.comboPorts.addItems(portList)
+
+    def returnOK(self):
+        Settings.BAUD_RATE = self.comboBaud.currentText()
+        Settings.COM_PORT_EKHO = self.comboPorts.currentText()
+        self.accept()
+
+    def returnNOT(self):
+        self.close()
+
 
 
 if __name__ == '__main__':
