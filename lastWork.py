@@ -641,6 +641,9 @@ class MainWindow(QMainWindow):
         self.labelInfo.setGeometry(5, 230, 210, 30)
         self.serial = QSerialPort(self)
 
+        self.strData = ''
+        self.dataStart = False
+
 
 
     def updateScale(self):
@@ -671,21 +674,36 @@ class MainWindow(QMainWindow):
             print(e)
 
     def onRead(self):
-        buffer = []
-        rx = self.serial.readLine()
-        rxs = str(rx, 'utf-8')
-        try:
-            print(rxs)
-        except Exception as e:
-            print(e)
-        # rxs = str(rx, 'utf-8').strip()
-        # print(rx)
-        # if Settings.GPS_DEPTH_KEY in rxs:
-        #     depthDataStr = rxs.split(',')
-        #     speed = depthDataStr[3]
-        #     self.LCDspeed.display(speed)
-        # if Settings.GPS_DATA_KEY in rxs:
-        #     gpsData = rxs.split(',')
+        buffer = ''
+        st = ''
+        #buffer = self.serial.read(1200)
+        buffer = self.serial.readLine()
+        rxs = str(buffer, 'utf-8')
+        # если пришло всё в одной строке:
+        if "$" in rxs:
+            self.dataStart = True
+            # if "\r\n" in rxs:
+            #     self.readyData = rxs.strip()
+            #     if Settings.GPS_DEPTH_KEY in self.readyData:
+            #         self.parsingDepthData(self.readyData)
+        if self.dataStart == True:
+            self.strData = self.strData + rxs.strip()
+        if (self.dataStart == True) and ("\r\n" in rxs):
+            self.dataStart == False
+            if Settings.GPS_DEPTH_KEY in self.strData:
+                self.parsingDepthData(self.strData)
+            elif Settings.GPS_DATA_KEY in self.strData:
+                self.parsingGPSData(self.strData)
+            print(len(str(self.strData)), self.strData)
+            self.strData = ''
+
+    def parsingDepthData(self, str):
+        data = str.split(',')
+        speed = data[3]
+        self.LCDspeed.display(speed)
+
+    def parsingGPSData(self, str):
+        pass
 
 
 
