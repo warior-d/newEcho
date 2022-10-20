@@ -631,12 +631,18 @@ class MainWindow(QMainWindow):
         else:
             self.scale.setGeometry(1575, 320, 22, 300)
         self.scale.valueChanged.connect(self.updateScale)
+
         self.LCDspeed = QLCDNumber(self)
+        self.LCDspeed.setStyleSheet("QLCDNumber { background-color: white; color: green; }")
         self.LCDspeed.setGeometry(5, 25, 110, 60)
+
         self.LCDcourse = QLCDNumber(self)
+        self.LCDcourse.setStyleSheet("QLCDNumber { background-color: white; color: green; }")
         self.LCDcourse.setGeometry(5, 85, 110, 60)
+
         self.LCDdepth = QLCDNumber(self)
         self.LCDdepth.setGeometry(5, 145, 110, 60)
+
         self.labelInfo = QLabel(self)
         self.labelInfo.setGeometry(5, 230, 210, 30)
         self.serial = QSerialPort(self)
@@ -681,6 +687,7 @@ class MainWindow(QMainWindow):
         rxs = str(buffer, 'utf-8')
         # если пришло всё в одной строке:
         if "$" in rxs:
+            self.strData = ''
             self.dataStart = True
             # if "\r\n" in rxs:
             #     self.readyData = rxs.strip()
@@ -694,7 +701,7 @@ class MainWindow(QMainWindow):
                 self.parsingDepthData(self.strData)
             elif Settings.GPS_DATA_KEY in self.strData:
                 self.parsingGPSData(self.strData)
-            print(len(str(self.strData)), self.strData)
+            #print(len(str(self.strData)), self.strData)
             self.strData = ''
 
     def parsingDepthData(self, str):
@@ -703,8 +710,29 @@ class MainWindow(QMainWindow):
         self.LCDspeed.display(speed)
 
     def parsingGPSData(self, str):
-        pass
+        data = str.split(',')
+        course = int(data[8])
+        Lat = data[3]
+        LatSign = data[4]
+        Lon = data[5]
+        LonSign = data[6]
+        LatDEC = self.NMEA2decimal(Lat, LatSign)
+        LonDEC = self.NMEA2decimal(Lon, LonSign)
+        print(LatDEC, LonDEC)
+        if course in range(0, 360):
+            self.LCDcourse.display(int(course))
 
+    def NMEA2decimal(self, strNMEA, sign):
+        try:
+            DD = int(float(strNMEA) / 100)
+            SS = float(strNMEA) - DD * 100
+            Dec = DD + SS / 60
+            if (sign == "S") or (sign == "W"):
+                return (0 - Dec)
+            else:
+                return Dec
+        except Exception as e:
+            print(e)
 
 
 class SettingsDialog(QDialog):
